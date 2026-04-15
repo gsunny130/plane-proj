@@ -3,6 +3,7 @@ import requests
 import os
 import json
 from dotenv import load_dotenv
+import time
 
 load_dotenv()
 
@@ -37,7 +38,7 @@ def get_info(callsign):
             'airline': airline
         }
     except (requests.exceptions.HTTPError, IndexError, KeyError) as e:
-        print(f"no flight data found: {e}")
+        print(f"no aviationstack flight data found: {e}")
         output = {}
     return output
 
@@ -69,6 +70,12 @@ def main():
             flight_cache = json.load(f)
     else:
         flight_cache = {}
+    
+    if os.path.exists('invalid_flight_cache.json'):
+        with open('invalid_flight_cache.json', 'r') as f:
+            invalid_flight_cache = json.load(f)
+    else:
+        invalid_flight_cache = []
 
     callsign_etc = get_callsign(box=south_phl)
 
@@ -77,22 +84,34 @@ def main():
     callsign = callsign_etc[0]
     velocity = callsign_etc[1]
     icao24 = callsign_etc[2]
+
     if callsign in flight_cache.keys():
         return flight_cache[callsign]
+    if callsign in invalid_flight_cache:
+        return (f"No flight information for {callsign}")
 
     output = get_info(callsign=callsign)
     if not output:
-        return("No flight data found")
+        print(callsign)
+        invalid_flight_cache.append(callsign)
+        return("No output returned from aviationstack")
     
     output = get_aircraft(icao24=icao24, output=output)
 
     flight_cache[callsign] = output
+
+    with open('invalid_flight_cache.json', 'w') as f:
+        json.dump(invalid_flight_cache, f)
+
     with open('flight_cache.json', 'w') as f:
         json.dump(flight_cache, f)
     return output
 
+
 if __name__ == "__main__":
-    print(main())
+    while True:
+        print(main())
+        time.sleep(60)
     
 
    
