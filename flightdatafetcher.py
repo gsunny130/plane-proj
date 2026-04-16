@@ -94,14 +94,13 @@ def main():
     if not output:
         print(callsign)
         invalid_flight_cache.append(callsign)
+        with open('invalid_flight_cache.json', 'w') as f:
+            json.dump(invalid_flight_cache, f)
         return("No output returned from aviationstack")
     
     output = get_aircraft(icao24=icao24, output=output)
 
     flight_cache[callsign] = output
-
-    with open('invalid_flight_cache.json', 'w') as f:
-        json.dump(invalid_flight_cache, f)
 
     with open('flight_cache.json', 'w') as f:
         json.dump(flight_cache, f)
