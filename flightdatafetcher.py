@@ -7,19 +7,22 @@ import time
 
 load_dotenv()
 
-def get_callsign(box):
-    callsign = ''
+def get_callsign(box, last_callsign):
     api = OpenSkyApi(token_manager=TokenManager.from_json_file("credentials.json"))
     s = api.get_states(bbox=box)
     states = s.states
     try:
-        callsign = states[0].callsign
-        velocity = states[0].velocity
-        icao24 = states[0].icao24
-        return [callsign, velocity, icao24]
-    except:
-        print("No planes right now")
+        for state in states:
+            if state.callsign == last_callsign:
+                continue
+            callsign = state.callsign
+            velocity = state.velocity
+            icao24 = state.icao24
+            return [callsign, velocity, icao24]
         return []
+    except:
+        return []
+        
 
 def get_info(callsign):
     access_key = os.getenv("AVI_ACCESS_KEY")
@@ -56,13 +59,21 @@ def get_aircraft(icao24, output):
         print("aircraft not found")
     return output
 
+def format_output(output):
+    output_string = "Departure Airport: " + output['departure_airport'] + "(" + output['departure_iata'] + ")\n"
+    output_string += output['airline'] + ' ' + output.get('aircraft_manufacturer', '') + ' ' + output.get('aircraft_code', 'unknown aircraft')
+    return output_string
+
 def main():
     # just hard coding the area I can see from my window
-    lamin = 39.879181
-    lomin = -75.191631
-    lamax = 39.895382
-    lomax = -75.119362
+    # took some trial and error using bboxfinder.com
+    lamin = 39.878786
+    lomin = -75.177126
+    lamax = 39.892024
+    lomax = -75.141592
     south_phl = [lamin, lamax, lomin, lomax]
+
+    global last_callsign
 
     # load cache file if it exists
     if os.path.exists('flight_cache.json'):
@@ -77,16 +88,26 @@ def main():
     else:
         invalid_flight_cache = []
 
-    callsign_etc = get_callsign(box=south_phl)
+    callsign_etc = get_callsign(box=south_phl, last_callsign=last_callsign)
 
     if not callsign_etc:
-        return("No planes right now") 
+        return("No new planes right now") 
     callsign = callsign_etc[0]
     velocity = callsign_etc[1]
     icao24 = callsign_etc[2]
 
+    # quit if it is the same plane we just saw
+    # redundant now because of the edit I made to get_callsign function
+    if callsign == last_callsign:
+        return(f"Same plane again: {callsign}")
+    # otherwise set last call sign as current call sign
+    else:
+        last_callsign = callsign
+
     if callsign in flight_cache.keys():
-        return flight_cache[callsign]
+        output = flight_cache[callsign]
+        output_string = format_output(output)
+        return(output_string)
     if callsign in invalid_flight_cache:
         return (f"No flight information for {callsign}")
 
@@ -104,13 +125,20 @@ def main():
 
     with open('flight_cache.json', 'w') as f:
         json.dump(flight_cache, f)
-    return output
+
+    output_string = format_output(output=output)
+    return output_string
 
 
 if __name__ == "__main__":
+    last_callsign = ''
     while True:
-        print(main())
-        time.sleep(60)
+        result = main()
+        pushcut_url = os.getenv("PUSHCUT_URL")
+        print(result)
+        if result and not result.startswith("No"):
+            requests.post(pushcut_url, json={"text": str(result)})
+        time.sleep(20)
     
 
    
